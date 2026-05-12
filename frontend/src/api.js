@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:18073";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:18073/api").replace(/\/$/, "");
 
 async function parseResponse(response) {
   const data = await response.json().catch(() => ({}));
@@ -18,7 +18,7 @@ export async function fetchModels({ baseUrl, apiKey }) {
 }
 
 export async function sendChat({ message, history, config }) {
-  const response = await fetch(`${API_BASE_URL}/api/chat`, {
+  const response = await fetch(`${API_BASE_URL}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

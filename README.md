@@ -62,7 +62,7 @@ npm run dev
 开发模式默认请求：
 
 ```text
-http://localhost:18073
+http://localhost:18073/api
 ```
 
 ## 使用方式
