@@ -1,0 +1,21 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/logs:/app/logs
+      - ./backend/prompts:/app/prompts:ro
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: /api
+    environment:
+      - NGINX_ENTRYPOINT_QUIET_LOGS=1
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
