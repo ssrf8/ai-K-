@@ -2,8 +2,8 @@ services:
   backend:
     build:
       context: ./backend
-    ports:
-      - "8000:8000"
+    expose:
+      - "18073"
     volumes:
       - ./backend/logs:/app/logs
       - ./backend/prompts:/app/prompts:ro

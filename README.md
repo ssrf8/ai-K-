@@ -31,12 +31,12 @@ docker compose up --build
 打开：
 
 - 前端：http://localhost:5173
-- 后端健康检查：http://localhost:8000/health
+- 后端健康检查：http://localhost:5173/health
 
 Compose 中前端容器使用 Nginx：
 
 - 页面静态文件由 Nginx 提供
-- `/api/*` 自动反向代理到后端 `backend:8000`
+- `/api/*` 自动反向代理到后端 `backend:18073`
 - 浏览器不需要直接知道后端容器地址
 
 ## 本地开发启动
@@ -48,7 +48,7 @@ cd backend
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 18073
 ```
 
 前端：
@@ -62,7 +62,7 @@ npm run dev
 开发模式默认请求：
 
 ```text
-http://localhost:8000
+http://localhost:18073
 ```
 
 ## 使用方式
@@ -143,4 +143,3 @@ backend/logs/conversations.jsonl
 - 不接账户资产
 - 不接 Binance 私有接口
 - 不构成投资建议
-
