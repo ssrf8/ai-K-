@@ -1,10 +1,21 @@
-MAX_PROMPT_CANDLES = 20
+from datetime import datetime
+
+
+MAX_COMPRESSED_PROMPT_CANDLES = 160
 
 
 def _fmt(value: float | int | None) -> str:
     if value is None:
         return "n/a"
     return f"{value:.8g}"
+
+
+def _compact_time(value: str) -> str:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed.strftime("%m-%d %H:%M")
+    except ValueError:
+        return value
 
 
 def _local_extremes(candles: list[dict], key: str, mode: str, limit: int = 5) -> list[dict]:
@@ -91,15 +102,20 @@ def build_market_context(market_results: list[dict]) -> str:
 
         summary = result.get("summary", {})
         candles = result.get("candles", [])
-        recent_candles = candles[-MAX_PROMPT_CANDLES:]
+        prompt_candles = candles[-MAX_COMPRESSED_PROMPT_CANDLES:]
         structure_summary = _build_structure_summary(candles)
         candle_lines = []
-        for index, candle in enumerate(recent_candles, start=1):
+        for index, candle in enumerate(prompt_candles, start=1):
             candle_lines.append(
-                f"{index}. time={candle['open_time']}, open={_fmt(candle['open'])}, "
-                f"high={_fmt(candle['high'])}, low={_fmt(candle['low'])}, "
-                f"close={_fmt(candle['close'])}, volume={_fmt(candle['volume'])}"
+                f"{index} t={_compact_time(candle['open_time'])} "
+                f"O={_fmt(candle['open'])} H={_fmt(candle['high'])} "
+                f"L={_fmt(candle['low'])} C={_fmt(candle['close'])} V={_fmt(candle['volume'])}"
             )
+        compression_note = (
+            "All fetched candles are included in compressed form."
+            if len(prompt_candles) == len(candles)
+            else f"Only the latest {len(prompt_candles)} candles are included in compressed form."
+        )
 
         sections.append(
             "\n".join(
@@ -109,7 +125,7 @@ def build_market_context(market_results: list[dict]) -> str:
                     f"Market: {summary.get('market_type', market_type)}",
                     f"Interval: {summary.get('interval', interval)}",
                     f"Fetched Candles: {len(candles)}",
-                    f"Detailed Candles Included Below: {len(recent_candles)}",
+                    f"Compressed Candles Included Below: {len(prompt_candles)}",
                     f"Last Close: {_fmt(summary.get('last_close'))}",
                     f"Change From First To Last: {_fmt(summary.get('change_pct_from_first_to_last'))}%",
                     f"Highest High: {_fmt(summary.get('highest_high'))}",
@@ -118,7 +134,13 @@ def build_market_context(market_results: list[dict]) -> str:
                     "",
                     *structure_summary,
                     "",
-                    "Recent candles:",
+                    "Compressed candle format guide:",
+                    "- The compressed candles below are ordered from oldest to newest.",
+                    "- t = UTC open time in MM-DD HH:MM.",
+                    "- O/H/L/C/V = open/high/low/close/volume.",
+                    f"- {compression_note}",
+                    "",
+                    "Compressed candles:",
                     *candle_lines,
                 ]
             )

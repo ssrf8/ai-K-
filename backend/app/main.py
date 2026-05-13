@@ -23,6 +23,15 @@ app.add_middleware(
 )
 
 
+KLINE_LIMIT_BY_INTERVAL = {
+    "1m": 120,
+    "5m": 120,
+    "15m": 96,
+    "1h": 72,
+    "4h": 42,
+}
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -84,6 +93,10 @@ def _resolve_interval(request: ChatRequest, extracted_interval: str) -> tuple[st
     return requested_interval, requested_interval
 
 
+def _kline_limit_for_interval(interval: str) -> int:
+    return KLINE_LIMIT_BY_INTERVAL.get(interval, 80)
+
+
 async def _handle_chat(request: ChatRequest) -> ChatResponse:
     loaded_file, methodology = load_methodology()
     persona_file, persona = load_persona()
@@ -92,9 +105,12 @@ async def _handle_chat(request: ChatRequest) -> ChatResponse:
     market_request = extract_market_request(request.message)
     requested_interval, resolved_interval = _resolve_interval(request, market_request["interval"])
     requested_market_type = request.market_type or "auto"
+    kline_limit = _kline_limit_for_interval(resolved_interval)
     market_results = []
     for symbol in market_request["symbols"]:
-        market_results.append(await fetch_klines_with_fallback(symbol, resolved_interval, requested_market_type))
+        market_results.append(
+            await fetch_klines_with_fallback(symbol, resolved_interval, requested_market_type, limit=kline_limit)
+        )
 
     market_context = build_market_context(market_results)
     market_data_status = _market_status(market_results)
@@ -125,6 +141,7 @@ async def _handle_chat(request: ChatRequest) -> ChatResponse:
             "detected_symbols": market_request["symbols"],
             "detected_interval": resolved_interval,
             "requested_interval": requested_interval,
+            "kline_limit": kline_limit,
             "requested_market_type": requested_market_type,
             "resolved_market_type": resolved_market_type,
             "market_data_status": market_data_status,
