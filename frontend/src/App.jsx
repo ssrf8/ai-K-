@@ -367,7 +367,7 @@ export default function App() {
         <form className="composer" onSubmit={handleSubmit}>
           <textarea
             value={input}
-            placeholder="输入币种、周期或你的分析问题..."
+            placeholder="输入币种、周期或你的分析问题，例如 比特币、BTC、【BAS】"
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {

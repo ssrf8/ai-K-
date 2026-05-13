@@ -21,7 +21,31 @@ BASE_TO_SYMBOL = {
 CHINESE_SYMBOLS = {
     "比特币": "BTCUSDT",
     "以太坊": "ETHUSDT",
+    "索拉纳": "SOLUSDT",
+    "币安币": "BNBUSDT",
+    "瑞波": "XRPUSDT",
+    "瑞波币": "XRPUSDT",
     "狗狗币": "DOGEUSDT",
+    "艾达币": "ADAUSDT",
+    "卡尔达诺": "ADAUSDT",
+    "雪崩": "AVAXUSDT",
+    "雪崩币": "AVAXUSDT",
+    "链环": "LINKUSDT",
+    "预言机": "LINKUSDT",
+    "通币": "TONUSDT",
+    "波场": "TRXUSDT",
+    "波场币": "TRXUSDT",
+    "莱特币": "LTCUSDT",
+    "比特现金": "BCHUSDT",
+    "波卡": "DOTUSDT",
+    "柴犬币": "SHIBUSDT",
+    "佩佩币": "PEPEUSDT",
+    "青蛙币": "PEPEUSDT",
+    "文件币": "FILUSDT",
+    "阿童木": "ATOMUSDT",
+    "近协议": "NEARUSDT",
+    "水滴": "SUIUSDT",
+    "阿普托斯": "APTUSDT",
 }
 
 SUPPORTED_INTERVALS = {
@@ -130,6 +154,15 @@ def extract_market_request(text: str) -> dict:
     for raw, symbol in CHINESE_SYMBOLS.items():
         if raw in text:
             _append_symbol(symbols, raw_mentions, symbol, raw)
+
+    wrapped_symbol_pattern = re.compile(
+        r"(?:[$#]\s*([A-Z][A-Z0-9]{1,9})|[【\[\(（]\s*([A-Z][A-Z0-9]{1,9})\s*[】\]\)）])",
+        re.IGNORECASE,
+    )
+    for match in wrapped_symbol_pattern.finditer(text):
+        token = (match.group(1) or match.group(2)).upper()
+        if _is_symbol_candidate(token):
+            _append_symbol(symbols, raw_mentions, _symbol_from_base(token), match.group(0))
 
     pair_pattern = re.compile(r"\b([A-Z][A-Z0-9]{1,9})\s*(?:/|-|\s)\s*USDT\b", re.IGNORECASE)
     for match in pair_pattern.finditer(text):
