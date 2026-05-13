@@ -9,7 +9,7 @@ from app.market_context_builder import build_market_context
 from app.prompt_builder import build_final_prompt, select_recent_context
 from app.prompt_loader import load_methodology, load_persona
 from app.schemas import ChatRequest, ChatResponse, ModelInfo, ModelsRequest, ModelsResponse
-from app.symbol_extractor import extract_market_request
+from app.symbol_extractor import extract_market_request, normalize_symbol_override
 
 
 app = FastAPI(title="Prompt Template Auto-Loader API")
@@ -103,6 +103,11 @@ async def _handle_chat(request: ChatRequest) -> ChatResponse:
     loaded_files = [loaded_file, persona_file]
     recent_context = select_recent_context(request.history)
     market_request = extract_market_request(request.message)
+    symbol_override = normalize_symbol_override(request.symbol_override)
+    if symbol_override:
+        market_request["symbols"] = [symbol_override]
+        market_request["raw_mentions"] = [request.symbol_override.strip()]
+
     requested_interval, resolved_interval = _resolve_interval(request, market_request["interval"])
     requested_market_type = request.market_type or "auto"
     kline_limit = _kline_limit_for_interval(resolved_interval)
@@ -139,6 +144,7 @@ async def _handle_chat(request: ChatRequest) -> ChatResponse:
         {
             "user_input": request.message,
             "detected_symbols": market_request["symbols"],
+            "symbol_override": symbol_override,
             "detected_interval": resolved_interval,
             "requested_interval": requested_interval,
             "kline_limit": kline_limit,

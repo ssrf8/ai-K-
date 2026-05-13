@@ -334,6 +334,14 @@ export default function App() {
                 <option value="4h">4H</option>
               </select>
             </label>
+            <label className="market-select symbol-select">
+              指定币种
+              <input
+                value={config.symbolOverride || ""}
+                placeholder="可填 币安人生 / BAS"
+                onChange={(event) => updateConfig({ symbolOverride: event.target.value })}
+              />
+            </label>
             <div className={`status ${isMockMode ? "mock" : "live"}`}>{statusText}</div>
             <button className="secondary" type="button" onClick={() => setSettingsOpen(true)}>
               设置
@@ -367,7 +375,7 @@ export default function App() {
         <form className="composer" onSubmit={handleSubmit}>
           <textarea
             value={input}
-            placeholder="输入币种、周期或你的分析问题，例如 比特币、BTC、【BAS】"
+            placeholder="输入币种、周期或你的分析问题，例如 比特币、BTC、【币安人生】"
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {

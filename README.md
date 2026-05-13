@@ -96,6 +96,8 @@ http://localhost:18073/api
 - 白名单外的大写币种也会尝试转换，例如 `BAS` -> `BASUSDT`
 - 常见中文币名会先转换成 Binance symbol，例如 `比特币` -> `BTCUSDT`、`索拉纳` -> `SOLUSDT`、`佩佩币` -> `PEPEUSDT`
 - 如果是小众中文名，建议显式写出 symbol：`【BAS】`、`[BAS]`、`$BAS`、`巴斯(BAS)` 都会识别为 `BASUSDT`
+- 顶部“指定币种”可以手动填写实际 Binance symbol，填了会优先于聊天内容识别；支持 `BAS`、`BASUSDT`、`币安人生`、`币安人生USDT` 这类输入
+- 如果中文 symbol 不在当前 Binance public K 线 API 中，页面会显示行情获取失败，但不会影响聊天流程
 - 如果前端选择了固定 K 线周期，会优先使用该周期
 - 如果前端选择“自动识别”，会从用户输入里识别 `15分钟`、`十五分钟`、`5M`、`1H`、`4H` 等周期
 - 如果没有识别到周期，默认使用 `15m`

@@ -22,6 +22,7 @@ class ChatRequest(BaseModel):
     model: str | None = None
     market_type: Literal["auto", "spot", "futures"] | None = "auto"
     kline_interval: Literal["auto", "1m", "5m", "15m", "1h", "4h"] | None = "auto"
+    symbol_override: str | None = None
     config: ApiConfig = Field(default_factory=ApiConfig)
 
 

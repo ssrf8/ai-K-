@@ -10,9 +10,10 @@ export function loadConfig() {
         model: "",
         marketType: "auto",
         klineInterval: "auto",
+        symbolOverride: "",
       };
     }
-    return { marketType: "auto", klineInterval: "auto", ...JSON.parse(raw) };
+    return { marketType: "auto", klineInterval: "auto", symbolOverride: "", ...JSON.parse(raw) };
   } catch {
     return {
       baseUrl: "https://api.openai.com/v1",
@@ -20,6 +21,7 @@ export function loadConfig() {
       model: "",
       marketType: "auto",
       klineInterval: "auto",
+      symbolOverride: "",
     };
   }
 }

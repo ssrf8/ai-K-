@@ -4,6 +4,7 @@ import re
 DEFAULT_INTERVAL = "15m"
 MAX_SYMBOLS = 3
 DEFAULT_QUOTE = "USDT"
+MANUAL_SYMBOL_PATTERN = re.compile(r"^[A-Z0-9\u4e00-\u9fff]{2,32}$", re.IGNORECASE)
 
 BASE_TO_SYMBOL = {
     "BTC": "BTCUSDT",
@@ -133,8 +134,19 @@ def _extract_interval(text: str) -> str:
 
 
 def _symbol_from_base(base: str) -> str:
-    normalized = base.upper()
+    normalized = re.sub(r"\s+", "", base).upper()
+    if normalized.endswith(DEFAULT_QUOTE):
+        return normalized
     return BASE_TO_SYMBOL.get(normalized, f"{normalized}{DEFAULT_QUOTE}")
+
+
+def _is_manual_symbol_candidate(token: str) -> bool:
+    normalized = re.sub(r"\s+", "", token).upper()
+    if normalized in STOP_TOKENS:
+        return False
+    if normalized in {interval.upper() for interval in SUPPORTED_INTERVALS}:
+        return False
+    return bool(MANUAL_SYMBOL_PATTERN.fullmatch(normalized))
 
 
 def _is_symbol_candidate(token: str) -> bool:
@@ -144,6 +156,16 @@ def _is_symbol_candidate(token: str) -> bool:
     if normalized in {interval.upper() for interval in SUPPORTED_INTERVALS}:
         return False
     return bool(re.fullmatch(r"[A-Z][A-Z0-9]{1,9}", normalized))
+
+
+def normalize_symbol_override(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    cleaned = value.strip().strip("【】[]()（）$#").strip()
+    if not _is_manual_symbol_candidate(cleaned):
+        return None
+    return _symbol_from_base(cleaned)
 
 
 def extract_market_request(text: str) -> dict:
@@ -156,12 +178,12 @@ def extract_market_request(text: str) -> dict:
             _append_symbol(symbols, raw_mentions, symbol, raw)
 
     wrapped_symbol_pattern = re.compile(
-        r"(?:[$#]\s*([A-Z][A-Z0-9]{1,9})|[【\[\(（]\s*([A-Z][A-Z0-9]{1,9})\s*[】\]\)）])",
+        r"(?:[$#]\s*([A-Z0-9\u4e00-\u9fff]{2,32})|[【\[\(（]\s*([A-Z0-9\u4e00-\u9fff]{2,32})\s*[】\]\)）])",
         re.IGNORECASE,
     )
     for match in wrapped_symbol_pattern.finditer(text):
         token = (match.group(1) or match.group(2)).upper()
-        if _is_symbol_candidate(token):
+        if _is_manual_symbol_candidate(token):
             _append_symbol(symbols, raw_mentions, _symbol_from_base(token), match.group(0))
 
     pair_pattern = re.compile(r"\b([A-Z][A-Z0-9]{1,9})\s*(?:/|-|\s)\s*USDT\b", re.IGNORECASE)

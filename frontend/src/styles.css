@@ -252,9 +252,14 @@ h2 {
   grid-template-columns: auto 170px;
 }
 
-.market-select select {
+.market-select select,
+.market-select input {
   min-height: 38px;
   padding: 8px 10px;
+}
+
+.symbol-select input {
+  min-width: 190px;
 }
 
 .messages {
