@@ -44,13 +44,20 @@ SUPPORTED_INTERVALS = {
 
 CHINESE_INTERVALS = {
     "1分钟": "1m",
+    "一分钟": "1m",
     "5分钟": "5m",
+    "五分钟": "5m",
     "15分钟": "15m",
+    "十五分钟": "15m",
     "30分钟": "30m",
     "1小时": "1h",
     "1时": "1h",
+    "一小时": "1h",
+    "一时": "1h",
     "4小时": "4h",
     "4时": "4h",
+    "四小时": "4h",
+    "四时": "4h",
     "日线": "1d",
     "周线": "1w",
     "月线": "1M",
@@ -77,12 +84,21 @@ def _append_symbol(symbols: list[str], raw_mentions: list[str], symbol: str, raw
 
 
 def _extract_interval(text: str) -> str:
-    for phrase, interval in CHINESE_INTERVALS.items():
+    for phrase, interval in sorted(CHINESE_INTERVALS.items(), key=lambda item: len(item[0]), reverse=True):
         if phrase in text:
             return interval
 
-    if re.search(r"(?<![A-Za-z0-9])1M(?![A-Za-z0-9])", text):
-        return "1M"
+    minute_match = re.search(r"(?<![A-Za-z0-9])(\d{1,2})\s*(?:分钟|分|m)(?![A-Za-z0-9])", text, re.IGNORECASE)
+    if minute_match:
+        interval = f"{minute_match.group(1)}m"
+        if interval in SUPPORTED_INTERVALS:
+            return interval
+
+    hour_match = re.search(r"(?<![A-Za-z0-9])(\d{1,2})\s*(?:小时|时|h)(?![A-Za-z0-9])", text, re.IGNORECASE)
+    if hour_match:
+        interval = f"{hour_match.group(1)}h"
+        if interval in SUPPORTED_INTERVALS:
+            return interval
 
     lowered = text.lower()
     for interval in sorted(SUPPORTED_INTERVALS - {"1M"}, key=len, reverse=True):
@@ -144,4 +160,3 @@ def extract_market_request(text: str) -> dict:
         "interval": _extract_interval(text),
         "raw_mentions": raw_mentions[:MAX_SYMBOLS],
     }
-

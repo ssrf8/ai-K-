@@ -19,6 +19,15 @@ const MARKET_TYPE_LABELS = {
   futures: "U本位合约",
 };
 
+const KLINE_INTERVAL_LABELS = {
+  auto: "自动识别",
+  "1m": "1M",
+  "5m": "5M",
+  "15m": "15M",
+  "1h": "1H",
+  "4h": "4H",
+};
+
 const THINK_PATTERN = /<think\b[^>]*>[\s\S]*?<\/think>/gi;
 
 function stripThinkBlocks(text) {
@@ -35,6 +44,10 @@ function marketStatusLabel(status) {
 
 function marketTypeLabel(type) {
   return MARKET_TYPE_LABELS[type] || type || "自动";
+}
+
+function klineIntervalLabel(interval) {
+  return KLINE_INTERVAL_LABELS[interval] || interval || "自动识别";
 }
 
 function keepNaturalContext(messages) {
@@ -307,6 +320,20 @@ export default function App() {
                 <option value="spot">只看现货</option>
               </select>
             </label>
+            <label className="market-select interval-select">
+              K线周期
+              <select
+                value={config.klineInterval || "auto"}
+                onChange={(event) => updateConfig({ klineInterval: event.target.value })}
+              >
+                <option value="auto">自动识别</option>
+                <option value="1m">1M</option>
+                <option value="5m">5M</option>
+                <option value="15m">15M</option>
+                <option value="1h">1H</option>
+                <option value="4h">4H</option>
+              </select>
+            </label>
             <div className={`status ${isMockMode ? "mock" : "live"}`}>{statusText}</div>
             <button className="secondary" type="button" onClick={() => setSettingsOpen(true)}>
               设置
@@ -373,7 +400,7 @@ export default function App() {
 
         <label>
           K 线周期
-          <input value={lastRun?.detected_interval || "15m"} readOnly />
+          <input value={klineIntervalLabel(lastRun?.detected_interval || "15m")} readOnly />
         </label>
 
         <label>
@@ -406,4 +433,3 @@ export default function App() {
     </div>
   );
 }
-

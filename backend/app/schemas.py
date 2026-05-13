@@ -21,6 +21,7 @@ class ChatRequest(BaseModel):
     api_key: str | None = None
     model: str | None = None
     market_type: Literal["auto", "spot", "futures"] | None = "auto"
+    kline_interval: Literal["auto", "1m", "5m", "15m", "1h", "4h"] | None = "auto"
     config: ApiConfig = Field(default_factory=ApiConfig)
 
 
@@ -31,6 +32,7 @@ class ChatResponse(BaseModel):
     loaded_prompt_files: list[str] = Field(default_factory=list)
     detected_symbols: list[str]
     detected_interval: str
+    requested_interval: str = "auto"
     requested_market_type: str = "auto"
     resolved_market_type: str | None = None
     market_data_status: str

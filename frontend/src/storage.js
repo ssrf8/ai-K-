@@ -9,15 +9,17 @@ export function loadConfig() {
         apiKey: "",
         model: "",
         marketType: "auto",
+        klineInterval: "auto",
       };
     }
-    return { marketType: "auto", ...JSON.parse(raw) };
+    return { marketType: "auto", klineInterval: "auto", ...JSON.parse(raw) };
   } catch {
     return {
       baseUrl: "https://api.openai.com/v1",
       apiKey: "",
       model: "",
       marketType: "auto",
+      klineInterval: "auto",
     };
   }
 }

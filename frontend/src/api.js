@@ -28,6 +28,7 @@ export async function sendChat({ message, history, config }) {
       api_key: config.apiKey,
       model: config.model,
       market_type: config.marketType || "auto",
+      kline_interval: config.klineInterval || "auto",
     }),
   });
   return parseResponse(response);

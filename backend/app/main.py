@@ -77,16 +77,24 @@ def _build_chart_data(market_results: list[dict]) -> list[dict]:
     return chart_data
 
 
+def _resolve_interval(request: ChatRequest, extracted_interval: str) -> tuple[str, str]:
+    requested_interval = request.kline_interval or "auto"
+    if requested_interval == "auto":
+        return requested_interval, extracted_interval
+    return requested_interval, requested_interval
+
+
 async def _handle_chat(request: ChatRequest) -> ChatResponse:
     loaded_file, methodology = load_methodology()
     persona_file, persona = load_persona()
     loaded_files = [loaded_file, persona_file]
     recent_context = select_recent_context(request.history)
     market_request = extract_market_request(request.message)
+    requested_interval, resolved_interval = _resolve_interval(request, market_request["interval"])
     requested_market_type = request.market_type or "auto"
     market_results = []
     for symbol in market_request["symbols"]:
-        market_results.append(await fetch_klines_with_fallback(symbol, market_request["interval"], requested_market_type))
+        market_results.append(await fetch_klines_with_fallback(symbol, resolved_interval, requested_market_type))
 
     market_context = build_market_context(market_results)
     market_data_status = _market_status(market_results)
@@ -98,7 +106,7 @@ async def _handle_chat(request: ChatRequest) -> ChatResponse:
     mocked = not has_api_config(api_base_url, api_key, model)
     if mocked:
         reply = mock_reply(request.message, ", ".join(loaded_files))
-        analysis_data = build_mock_analysis(market_results, market_request["interval"], market_request["symbols"])
+        analysis_data = build_mock_analysis(market_results, resolved_interval, market_request["symbols"])
     else:
         try:
             raw_reply = await chat_completion(
@@ -115,7 +123,8 @@ async def _handle_chat(request: ChatRequest) -> ChatResponse:
         {
             "user_input": request.message,
             "detected_symbols": market_request["symbols"],
-            "detected_interval": market_request["interval"],
+            "detected_interval": resolved_interval,
+            "requested_interval": requested_interval,
             "requested_market_type": requested_market_type,
             "resolved_market_type": resolved_market_type,
             "market_data_status": market_data_status,
@@ -138,7 +147,8 @@ async def _handle_chat(request: ChatRequest) -> ChatResponse:
         loaded_prompt_files=loaded_files,
         loaded_file=loaded_file,
         detected_symbols=market_request["symbols"],
-        detected_interval=market_request["interval"],
+        detected_interval=resolved_interval,
+        requested_interval=requested_interval,
         requested_market_type=requested_market_type,
         resolved_market_type=resolved_market_type,
         market_data_status=market_data_status,
