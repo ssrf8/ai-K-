@@ -120,6 +120,25 @@ Prompt 要求模型返回两部分：
 
 `<think>...</think>` 会被后端和前端双重过滤。
 
+## K 线写入 Prompt 的方式
+
+后端会拉取一批 K 线用于图表和统计，但不会把所有 K 线明细都塞进 prompt。
+
+当前 prompt 中包含：
+
+- `Fetched Candles`：后端实际获取的 K 线数量
+- `Detailed Candles Included Below`：详细写入 prompt 的 K 线数量
+- 完整窗口压缩摘要：
+  - 窗口最高点
+  - 窗口最低点
+  - 窗口振幅
+  - 最新收盘价在窗口区间中的位置
+  - 最近局部高点
+  - 最近局部低点
+- 最近若干根 K 线明细
+
+这样既保留完整窗口结构，又避免 prompt 过长。
+
 ## 日志
 
 每次 `/api/chat` 会追加 JSONL 到：
