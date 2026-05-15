@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchModels, sendChat } from "./api";
 import KlineChart from "./KlineChart";
@@ -76,10 +76,18 @@ export default function App() {
   const [expandedInjectIndex, setExpandedInjectIndex] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [debugPromptOpen, setDebugPromptOpen] = useState(false);
+  const messagesRef = useRef(null);
 
   useEffect(() => {
     saveConfig(config);
   }, [config]);
+
+  useEffect(() => {
+    const messagesNode = messagesRef.current;
+    if (messagesNode) {
+      messagesNode.scrollTop = messagesNode.scrollHeight;
+    }
+  }, [messages]);
 
   const canLoadModels = config.baseUrl.trim() && config.apiKey.trim();
   const isMockMode = !(config.baseUrl.trim() && config.apiKey.trim() && config.model.trim());
@@ -352,7 +360,7 @@ export default function App() {
           </div>
         </header>
 
-        <section className="messages" aria-live="polite">
+        <section className="messages" aria-live="polite" ref={messagesRef}>
           {messages.length === 0 ? (
             <div className="empty-state">
               <div className="empty-emblem">◆</div>
