@@ -116,5 +116,7 @@ Recent Natural Conversation Context is natural-language context only; do not reu
 严格遵守 Fixed Gold Methodology 里的输出格式和 analysis_json 字段。
 Current Gold Context JSON 中的周期、字段和值为唯一行情来源；不要使用旧对话里的行情数据。
 如果 JSON 只有日期没有具体发布时间，只能提示“今日有高影响事件风险”，不要说“事件前2小时”。
+经济日历只作为风险影响因子，不要因为出现高影响事件就机械否决结构方案；仍需给出主方案和备选方案概率。
+如果用户问“能不能买/现在可以买入吗/能不能空”，用户可见回复不能只说“别急/等收线/观望”；必须给出对应方向的概率、反向方案概率、观望概率和各自触发条件。
 不要输出隐藏推理链，不要承诺收益，不要编造未提供的点位。
 """

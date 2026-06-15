@@ -837,6 +837,24 @@ def _event_importance(event_name: str) -> str:
     return "high" if any(keyword in lowered for keyword in high_keywords) else "medium"
 
 
+def _event_timing_reliability(event_name: str) -> dict[str, Any]:
+    lowered = event_name.lower()
+    if "fomc" in lowered:
+        return {
+            "date_confidence": "low",
+            "affects_today": False,
+            "timing_note": (
+                "FRED Release Calendar 对 FOMC 只适合作为低可信风险提示，"
+                "可能返回发布序列或窗口日期，不等同于真实会议/发布会时间。"
+            ),
+        }
+    return {
+        "date_confidence": "medium",
+        "affects_today": None,
+        "timing_note": "FRED Release Calendar 只提供日期，不提供具体发布时间。",
+    }
+
+
 def _release_date_value(item: dict) -> str | None:
     value = item.get("date") or item.get("release_date")
     if isinstance(value, str):
@@ -912,6 +930,12 @@ async def fetch_economic_calendar() -> dict[str, Any]:
             if not _event_matches(event_name):
                 continue
             release_date = _release_date_value(item)
+            timing = _event_timing_reliability(event_name)
+            affects_today = (
+                bool(timing["affects_today"])
+                if timing["affects_today"] is not None
+                else release_date == today.isoformat()
+            )
             events.append(
                 {
                     "event": event_name,
@@ -920,15 +944,25 @@ async def fetch_economic_calendar() -> dict[str, Any]:
                     "forecast": None,
                     "previous": None,
                     "importance": _event_importance(event_name),
+                    "date_confidence": timing["date_confidence"],
+                    "affects_today": affects_today,
                     "release_id": item.get("release_id"),
                     "source": "FRED Release Calendar",
-                    "note": "FRED Release Calendar 提供发布时间/日期，不提供市场预期值和公布值。",
+                    "note": timing["timing_note"],
                 }
             )
 
-        next_event = events[0] if events else None
+        actionable_events = [
+            event for event in events
+            if event.get("affects_today") is True or event.get("date_confidence") != "low"
+        ]
+        unconfirmed_events = [
+            event for event in events
+            if event.get("date_confidence") == "low"
+        ]
+        next_event = actionable_events[0] if actionable_events else None
         has_high_today = any(
-            event.get("importance") == "high" and event.get("date") == today.isoformat()
+            event.get("importance") == "high" and event.get("affects_today") is True
             for event in events
         )
         return _cache_set(
@@ -938,15 +972,19 @@ async def fetch_economic_calendar() -> dict[str, Any]:
                 "source": "FRED Release Calendar",
                 "has_high_impact_event_today": has_high_today,
                 "next_event": next_event,
-                "events": events[:10],
+                "events": actionable_events[:10],
+                "unconfirmed_events": unconfirmed_events[:10],
                 "trade_filter": (
-                    "今日有高影响事件风险；FRED 只提供日期不提供具体发布时间，先不提前进场，等15m收线确认。"
+                    "今日有高影响事件风险；FRED 只提供日期不提供具体发布时间。该日历只作为风险因子，不单独否决结构方案；请提高确认要求，并同时给出主方案与备选方案概率。"
                     if has_high_today
-                    else "未来7天有高影响事件日历，FRED 只提供日期不提供具体发布时间。"
-                    if next_event
+                    else "未来7天有高影响事件日历或低可信日期风险；FRED 日期不等同于精确发布时间。该日历只作为风险因子，不单独否决结构方案。"
+                    if next_event or unconfirmed_events
                     else "暂无筛选到的美国高影响事件。"
                 ),
-                "notes": ["FRED Release Calendar 不提供 forecast/actual，预期值和公布值仍需其他来源补充。"],
+                "notes": [
+                    "FRED Release Calendar 不提供 forecast/actual，预期值和公布值仍需其他来源补充。",
+                    "FOMC 类事件的 FRED 日期可能是发布序列或窗口日期，未用来直接触发今日高影响事件。",
+                ],
             },
         )
     except Exception as exc:
