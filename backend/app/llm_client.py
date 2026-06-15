@@ -51,15 +51,3 @@ async def chat_completion(base_url: str, api_key: str, model: str, final_prompt:
         return data["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as exc:
         raise LLMClientError("Chat response did not contain choices[0].message.content") from exc
-
-
-def mock_reply(user_message: str, loaded_file: str) -> str:
-    return (
-        "[Mock reply]\n"
-        "结论：当前未配置完整 LLM API，因此返回 mock 结果。\n\n"
-        f"已加载提示词文件：{loaded_file}\n"
-        f"收到的问题：{user_message}\n\n"
-        "关键依据：后端已完成固定提示词、当前 market context 和用户输入的 prompt 组装。"
-        "如需真实模型回复，请配置 API Base URL、API Key 和 Model。\n\n"
-        "这不是投资建议。"
-    )

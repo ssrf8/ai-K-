@@ -8,20 +8,31 @@ export function loadConfig() {
         baseUrl: "https://api.openai.com/v1",
         apiKey: "",
         model: "",
+        templateMode: "crypto",
         marketType: "auto",
         klineInterval: "auto",
         symbolOverride: "",
+        showFibonacci: true,
       };
     }
-    return { marketType: "auto", klineInterval: "auto", symbolOverride: "", ...JSON.parse(raw) };
+    return {
+      templateMode: "crypto",
+      marketType: "auto",
+      klineInterval: "auto",
+      symbolOverride: "",
+      showFibonacci: true,
+      ...JSON.parse(raw),
+    };
   } catch {
     return {
       baseUrl: "https://api.openai.com/v1",
       apiKey: "",
       model: "",
+      templateMode: "crypto",
       marketType: "auto",
       klineInterval: "auto",
       symbolOverride: "",
+      showFibonacci: true,
     };
   }
 }

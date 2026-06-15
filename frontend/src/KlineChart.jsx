@@ -17,11 +17,20 @@ function toNumber(value) {
   return Number.isFinite(number) ? number : null;
 }
 
-function priceLinesFromAnalysis(analysis) {
-  if (!analysis) return [];
+function zoneLineValues(values = []) {
+  return values
+    .map((value) => (typeof value === "number" ? { low: value, high: value } : value))
+    .filter(Boolean);
+}
+
+function priceLinesFromAnalysis(analysis, fibonacci, showFibonacci) {
+  if (!analysis && !fibonacci) return [];
 
   const lines = [];
-  for (const zone of analysis.resistance_zones || []) {
+  const resistanceZones = analysis?.resistance_zones || zoneLineValues(analysis?.key_levels?.resistance);
+  const supportZones = analysis?.support_zones || zoneLineValues(analysis?.key_levels?.support);
+
+  for (const zone of resistanceZones) {
     const high = toNumber(zone.high);
     const low = toNumber(zone.low);
     if (high !== null) {
@@ -32,7 +41,7 @@ function priceLinesFromAnalysis(analysis) {
     }
   }
 
-  for (const zone of analysis.support_zones || []) {
+  for (const zone of supportZones) {
     const high = toNumber(zone.high);
     const low = toNumber(zone.low);
     if (high !== null) {
@@ -43,13 +52,22 @@ function priceLinesFromAnalysis(analysis) {
     }
   }
 
-  const boxUpper = toNumber(analysis.box?.upper);
-  const boxLower = toNumber(analysis.box?.lower);
+  const boxUpper = toNumber(analysis?.box?.upper);
+  const boxLower = toNumber(analysis?.box?.lower);
   if (boxUpper !== null) {
     lines.push({ price: boxUpper, title: "箱体上沿", color: "#aab8ff", style: LineStyle.Dotted });
   }
   if (boxLower !== null) {
     lines.push({ price: boxLower, title: "箱体下沿", color: "#aab8ff", style: LineStyle.Dotted });
+  }
+
+  if (showFibonacci && fibonacci?.levels?.retracements) {
+    for (const [ratio, price] of Object.entries(fibonacci.levels.retracements)) {
+      const number = toNumber(price);
+      if (number !== null) {
+        lines.push({ price: number, title: `Fib ${ratio}`, color: "#c084fc", style: LineStyle.Dashed });
+      }
+    }
   }
 
   return lines;
@@ -61,16 +79,23 @@ function fmt(value) {
   return number.toLocaleString("zh-CN", { maximumFractionDigits: 8 });
 }
 
-export default function KlineChart({ chartData, analysis }) {
+function formatLevelList(values = []) {
+  return values.length ? values.map(fmt).join(" / ") : "";
+}
+
+export default function KlineChart({ chartData, analysis, fibonacci, showFibonacci = true }) {
   const containerRef = useRef(null);
   const primary = chartData?.[0];
   const candles = primary?.candles || [];
   const symbol = primary?.symbol || analysis?.symbol || "未识别";
-  const interval = primary?.interval || analysis?.interval || "15m";
+  const interval = primary?.interval || analysis?.primary_interval || analysis?.interval || "15m";
   const marketType = primary?.market_type === "futures" ? "U本位合约" : primary?.market_type === "spot" ? "现货" : "自动";
 
   const chartCandles = useMemo(() => toChartCandles(candles), [candles]);
-  const priceLines = useMemo(() => priceLinesFromAnalysis(analysis), [analysis]);
+  const priceLines = useMemo(
+    () => priceLinesFromAnalysis(analysis, fibonacci, showFibonacci),
+    [analysis, fibonacci, showFibonacci],
+  );
   const lastClose = toNumber(candles.at(-1)?.close);
 
   useEffect(() => {
@@ -186,10 +211,11 @@ export default function KlineChart({ chartData, analysis }) {
       </div>
 
       <div className="chart-summary">
-        <span>方向：<strong>{analysis?.bias || "无"}</strong></span>
-        <span>阻力：<strong>{fmt(analysis?.resistance_zones?.[0]?.low)} - {fmt(analysis?.resistance_zones?.[0]?.high)}</strong></span>
-        <span>支撑：<strong>{fmt(analysis?.support_zones?.[0]?.low)} - {fmt(analysis?.support_zones?.[0]?.high)}</strong></span>
+        <span>方向：<strong>{analysis?.short_term_bias || analysis?.bias || "无"}</strong></span>
+        <span>阻力：<strong>{formatLevelList(analysis?.key_levels?.resistance) || `${fmt(analysis?.resistance_zones?.[0]?.low)} - ${fmt(analysis?.resistance_zones?.[0]?.high)}`}</strong></span>
+        <span>支撑：<strong>{formatLevelList(analysis?.key_levels?.support) || `${fmt(analysis?.support_zones?.[0]?.low)} - ${fmt(analysis?.support_zones?.[0]?.high)}`}</strong></span>
         <span>箱体：<strong>{fmt(analysis?.box?.lower)} - {fmt(analysis?.box?.upper)}</strong></span>
+        <span>Fib：<strong>{showFibonacci ? "显示" : "隐藏"}</strong></span>
       </div>
 
       <div ref={containerRef} className="kline-canvas" />
@@ -197,15 +223,15 @@ export default function KlineChart({ chartData, analysis }) {
       <div className="analysis-notes">
         <div>
           <span>确认</span>
-          <p>{analysis?.confirmation || "暂无"}</p>
+          <p>{analysis?.recheck_condition || analysis?.confirmation || "暂无"}</p>
         </div>
         <div>
           <span>失效</span>
-          <p>{analysis?.invalidation || "暂无"}</p>
+          <p>{analysis?.key_levels?.invalid_level ? `失效位 ${fmt(analysis.key_levels.invalid_level)}` : analysis?.invalidation || "暂无"}</p>
         </div>
         <div>
           <span>风险</span>
-          <p>{analysis?.risk_note || "暂无"}</p>
+          <p>{analysis?.event_risk?.filter || analysis?.risk_note || "暂无"}</p>
         </div>
       </div>
     </section>

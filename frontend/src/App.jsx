@@ -19,6 +19,11 @@ const MARKET_TYPE_LABELS = {
   futures: "U本位合约",
 };
 
+const TEMPLATE_MODE_LABELS = {
+  crypto: "加密货币",
+  gold: "黄金分析",
+};
+
 const KLINE_INTERVAL_LABELS = {
   auto: "自动识别",
   "1m": "1M",
@@ -26,6 +31,7 @@ const KLINE_INTERVAL_LABELS = {
   "15m": "15M",
   "1h": "1H",
   "4h": "4H",
+  "1d": "1D",
 };
 
 const THINK_PATTERN = /<think\b[^>]*>[\s\S]*?<\/think>/gi;
@@ -48,6 +54,15 @@ function marketTypeLabel(type) {
 
 function klineIntervalLabel(interval) {
   return KLINE_INTERVAL_LABELS[interval] || interval || "自动识别";
+}
+
+function templateModeLabel(mode) {
+  return TEMPLATE_MODE_LABELS[mode] || "加密货币";
+}
+
+function sourceStatus(value) {
+  if (!value) return "未知";
+  return typeof value === "string" ? value : value.status || "未知";
 }
 
 function keepNaturalContext(messages) {
@@ -90,7 +105,7 @@ export default function App() {
   }, [messages]);
 
   const canLoadModels = config.baseUrl.trim() && config.apiKey.trim();
-  const isMockMode = !(config.baseUrl.trim() && config.apiKey.trim() && config.model.trim());
+  const isMissingModelConfig = !(config.baseUrl.trim() && config.apiKey.trim() && config.model.trim());
 
   const finalPrompt = lastRun?.final_prompt || "";
   const loadedFile =
@@ -101,9 +116,9 @@ export default function App() {
 
   const statusText = useMemo(() => {
     if (loading) return "推理中";
-    if (isMockMode) return "模拟模式";
+    if (isMissingModelConfig) return "未配置模型接口";
     return `接口已连接：${config.model}`;
-  }, [config.model, isMockMode, loading]);
+  }, [config.model, isMissingModelConfig, loading]);
 
   function updateConfig(patch) {
     setConfig((current) => ({ ...current, ...patch }));
@@ -171,10 +186,63 @@ export default function App() {
     setError("");
   }
 
+  function renderGoldSummary(run) {
+    if (run.template_mode !== "gold") return null;
+
+    const macro = run.macro_summary || {};
+    const calendar = run.economic_calendar || {};
+    const news = run.official_news || {};
+    const kline = run.gold_context_json?.kline_summary || {};
+    const intervals = kline.intervals || [];
+    const fredNotes = macro.data_quality?.fred?.notes || [];
+    const nextEvent = calendar.next_event;
+
+    return (
+      <div className="gold-summary">
+        <div>
+          <span>模板</span>
+          <strong>黄金分析 · XAUUSDT</strong>
+        </div>
+        <div>
+          <span>K线注入</span>
+          <strong>{intervals.join(" / ") || "暂无"} · {kline.total_candles_per_symbol || 0}根</strong>
+        </div>
+        <div>
+          <span>宏观偏向</span>
+          <strong>{macro.macro_bias_for_gold || "unavailable"} · {macro.macro_score ?? "无分数"}</strong>
+        </div>
+        <div>
+          <span>FRED状态</span>
+          <strong>{macro.data_quality?.fred?.status || sourceStatus(run.macro_data_status?.fred)}</strong>
+        </div>
+        <div className="wide">
+          <span>下一事件</span>
+          <strong>{nextEvent ? `${nextEvent.event} · ${nextEvent.date || "时间未知"}` : "暂无筛选到的高影响事件"}</strong>
+        </div>
+        <div className="wide">
+          <span>事件过滤</span>
+          <strong>{calendar.trade_filter || "暂无"}</strong>
+        </div>
+        <div className="wide">
+          <span>官方快讯</span>
+          <strong>{news.latest_alert?.title || "暂无 Fed 高影响快讯"}</strong>
+        </div>
+        {fredNotes.length ? (
+          <div className="wide warning">
+            <span>FRED提示</span>
+            <strong>{fredNotes.join("；")}</strong>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   function renderRunPanel(message, index) {
     if (message.role !== "assistant" || !message.run) return null;
 
     const run = message.run;
+    const chartInterval = run.chart_data?.[0]?.interval || run.analysis_data?.primary_interval || run.detected_interval || "15m";
+    const chartFibonacci = run.gold_context_json?.kline_summary?.by_interval?.[chartInterval]?.fibonacci || null;
     const promptOpen = expandedPromptIndex === index;
     const injectOpen = expandedInjectIndex === index;
     const loadedFiles = run.loaded_prompt_files?.length
@@ -183,14 +251,20 @@ export default function App() {
 
     return (
       <div className="run-stack">
-        <KlineChart chartData={run.chart_data} analysis={run.analysis_data} />
+        <KlineChart
+          chartData={run.chart_data}
+          analysis={run.analysis_data}
+          fibonacci={chartFibonacci}
+          showFibonacci={config.showFibonacci !== false}
+        />
+        {renderGoldSummary(run)}
 
         <div className="market-panel collapsed-panel">
           <div className="market-panel-head">
             <div>
               <div className="market-title">本轮注入</div>
               <p className="muted">
-                {formatList(run.detected_symbols)} · {run.detected_interval} ·{" "}
+                {templateModeLabel(run.template_mode)} · {formatList(run.detected_symbols)} · {run.detected_interval} ·{" "}
                 {marketTypeLabel(run.resolved_market_type || run.requested_market_type)}
               </p>
             </div>
@@ -206,6 +280,10 @@ export default function App() {
           {injectOpen ? (
             <>
               <dl>
+                <div>
+                  <dt>模板</dt>
+                  <dd>{templateModeLabel(run.template_mode)}</dd>
+                </div>
                 <div>
                   <dt>提示词文件</dt>
                   <dd>{loadedFiles}</dd>
@@ -302,7 +380,7 @@ export default function App() {
               />
             </label>
 
-            <div className={`status ${isMockMode ? "mock" : "live"}`}>{statusText}</div>
+            <div className={`status ${isMissingModelConfig ? "missing" : "live"}`}>{statusText}</div>
           </aside>
         </div>
       ) : null}
@@ -313,15 +391,26 @@ export default function App() {
             <div className="brand-mark">链</div>
             <div>
               <h1>行情结构分析台</h1>
-              <p className="muted">币安 K 线 · 方法论 · 人设 · 结构标注</p>
+              <p className="muted">币安 K 线 · 方法论 · 宏观过滤 · 结构标注</p>
             </div>
           </div>
           <div className="topbar-actions">
+            <label className="market-select">
+              模板
+              <select
+                value={config.templateMode || "crypto"}
+                onChange={(event) => updateConfig({ templateMode: event.target.value })}
+              >
+                <option value="crypto">加密货币</option>
+                <option value="gold">黄金分析</option>
+              </select>
+            </label>
             <label className="market-select">
               行情市场
               <select
                 value={config.marketType || "auto"}
                 onChange={(event) => updateConfig({ marketType: event.target.value })}
+                disabled={(config.templateMode || "crypto") === "gold"}
               >
                 <option value="auto">自动：优先合约</option>
                 <option value="futures">只看U本位合约</option>
@@ -333,6 +422,7 @@ export default function App() {
               <select
                 value={config.klineInterval || "auto"}
                 onChange={(event) => updateConfig({ klineInterval: event.target.value })}
+                disabled={(config.templateMode || "crypto") === "gold"}
               >
                 <option value="auto">自动识别</option>
                 <option value="1m">1M</option>
@@ -340,17 +430,29 @@ export default function App() {
                 <option value="15m">15M</option>
                 <option value="1h">1H</option>
                 <option value="4h">4H</option>
+                <option value="1d">1D</option>
               </select>
             </label>
             <label className="market-select symbol-select">
               指定币种
               <input
                 value={config.symbolOverride || ""}
-                placeholder="可填 币安人生 / BAS"
+                placeholder={(config.templateMode || "crypto") === "gold" ? "黄金模式固定 XAUUSDT" : "可填 币安人生 / BAS"}
                 onChange={(event) => updateConfig({ symbolOverride: event.target.value })}
+                disabled={(config.templateMode || "crypto") === "gold"}
               />
             </label>
-            <div className={`status ${isMockMode ? "mock" : "live"}`}>{statusText}</div>
+            {(config.templateMode || "crypto") === "gold" ? (
+              <label className="fib-toggle">
+                <input
+                  type="checkbox"
+                  checked={config.showFibonacci !== false}
+                  onChange={(event) => updateConfig({ showFibonacci: event.target.checked })}
+                />
+                显示Fib
+              </label>
+            ) : null}
+            <div className={`status ${isMissingModelConfig ? "missing" : "live"}`}>{statusText}</div>
             <button className="secondary" type="button" onClick={() => setSettingsOpen(true)}>
               设置
             </button>
@@ -365,7 +467,11 @@ export default function App() {
             <div className="empty-state">
               <div className="empty-emblem">◆</div>
               <h2>等待行情指令</h2>
-              <p>输入“帮我分析比特币十五分钟”，系统会自动拉取 K 线、生成结构判断并标到图上。</p>
+              <p>
+                {(config.templateMode || "crypto") === "gold"
+                  ? "输入“黄金现在怎么看”，系统会拉取 XAUUSDT 多周期 K 线、宏观数据和事件过滤。"
+                  : "输入“帮我分析比特币十五分钟”，系统会自动拉取 K 线、生成结构判断并标到图上。"}
+              </p>
             </div>
           ) : (
             messages.map((message, index) => (
@@ -383,7 +489,7 @@ export default function App() {
         <form className="composer" onSubmit={handleSubmit}>
           <textarea
             value={input}
-            placeholder="输入币种、周期或你的分析问题，例如 比特币、BTC、【币安人生】"
+            placeholder={(config.templateMode || "crypto") === "gold" ? "输入黄金分析问题，例如 黄金现在怎么看" : "输入币种、周期或你的分析问题，例如 比特币、BTC、【币安人生】"}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
@@ -401,8 +507,13 @@ export default function App() {
       <aside className="debug-panel">
         <div className="debug-header">
           <h2>本轮链路</h2>
-          <span>{lastRun?.mocked ? "模拟" : lastRun ? "实时" : "待机"}</span>
+          <span>{lastRun ? "实时" : "待机"}</span>
         </div>
+
+        <label>
+          模板
+          <input value={templateModeLabel(lastRun?.template_mode)} readOnly />
+        </label>
 
         <label>
           加载文件

@@ -20,8 +20,9 @@ class ChatRequest(BaseModel):
     api_base_url: str | None = None
     api_key: str | None = None
     model: str | None = None
+    template_mode: Literal["crypto", "gold"] | None = "crypto"
     market_type: Literal["auto", "spot", "futures"] | None = "auto"
-    kline_interval: Literal["auto", "1m", "5m", "15m", "1h", "4h"] | None = "auto"
+    kline_interval: Literal["auto", "1m", "5m", "15m", "1h", "4h", "1d"] | None = "auto"
     symbol_override: str | None = None
     config: ApiConfig = Field(default_factory=ApiConfig)
 
@@ -31,6 +32,7 @@ class ChatResponse(BaseModel):
     final_prompt: str
     loaded_prompt_file: str
     loaded_prompt_files: list[str] = Field(default_factory=list)
+    template_mode: str = "crypto"
     detected_symbols: list[str]
     detected_interval: str
     requested_interval: str = "auto"
@@ -40,6 +42,11 @@ class ChatResponse(BaseModel):
     market_context: str
     chart_data: list[dict[str, Any]] = Field(default_factory=list)
     analysis_data: dict[str, Any] | None = None
+    gold_context_json: dict[str, Any] | None = None
+    macro_data_status: dict[str, Any] | None = None
+    macro_summary: dict[str, Any] | None = None
+    economic_calendar: dict[str, Any] | None = None
+    official_news: dict[str, Any] | None = None
     loaded_file: str | None = None
     model: str | None = None
     mocked: bool

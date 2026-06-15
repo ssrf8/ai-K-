@@ -24,6 +24,7 @@ export async function sendChat({ message, history, config }) {
     body: JSON.stringify({
       message,
       history,
+      template_mode: config.templateMode || "crypto",
       api_base_url: config.baseUrl,
       api_key: config.apiKey,
       model: config.model,

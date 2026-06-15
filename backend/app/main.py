@@ -1,13 +1,14 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.analysis_parser import build_mock_analysis, parse_analysis_response
+from app.analysis_parser import parse_analysis_response
 from app.binance_client import fetch_klines_with_fallback
-from app.llm_client import LLMClientError, chat_completion, fetch_models, has_api_config, mock_reply
+from app.gold_context_builder import GOLD_CHART_INTERVAL, GOLD_SYMBOL, build_gold_context, gold_context_to_prompt_json
+from app.llm_client import LLMClientError, chat_completion, fetch_models, has_api_config
 from app.logger import write_jsonl
 from app.market_context_builder import build_market_context
-from app.prompt_builder import build_final_prompt, select_recent_context
-from app.prompt_loader import load_methodology, load_persona
+from app.prompt_builder import build_final_prompt, build_gold_final_prompt, select_recent_context
+from app.prompt_loader import load_gold_methodology, load_methodology, load_persona
 from app.schemas import ChatRequest, ChatResponse, ModelInfo, ModelsRequest, ModelsResponse
 from app.symbol_extractor import extract_market_request, normalize_symbol_override
 
@@ -29,6 +30,7 @@ KLINE_LIMIT_BY_INTERVAL = {
     "15m": 96,
     "1h": 72,
     "4h": 42,
+    "1d": 30,
 }
 
 
@@ -57,6 +59,11 @@ def _resolve_api_config(request: ChatRequest) -> tuple[str | None, str | None, s
     api_key = request.api_key if request.api_key is not None else request.config.api_key
     model = request.model if request.model is not None else request.config.model
     return base_url, api_key, model
+
+
+def _require_api_config(api_base_url: str | None, api_key: str | None, model: str | None) -> None:
+    if not has_api_config(api_base_url, api_key, model):
+        raise HTTPException(status_code=400, detail="未配置完整模型接口，请填写 API Base URL、API Key 和 Model。")
 
 
 def _market_status(market_results: list[dict]) -> str:
@@ -98,6 +105,12 @@ def _kline_limit_for_interval(interval: str) -> int:
 
 
 async def _handle_chat(request: ChatRequest) -> ChatResponse:
+    if (request.template_mode or "crypto") == "gold":
+        return await _handle_gold_chat(request)
+
+    api_base_url, api_key, model = _resolve_api_config(request)
+    _require_api_config(api_base_url, api_key, model)
+
     loaded_file, methodology = load_methodology()
     persona_file, persona = load_persona()
     loaded_files = [loaded_file, persona_file]
@@ -123,22 +136,16 @@ async def _handle_chat(request: ChatRequest) -> ChatResponse:
     resolved_market_type = next((result.get("market_type") for result in market_results if result.get("status") == "ok"), None)
     final_prompt = build_final_prompt(methodology, persona, recent_context, market_context, request.message)
 
-    api_base_url, api_key, model = _resolve_api_config(request)
-    mocked = not has_api_config(api_base_url, api_key, model)
-    if mocked:
-        reply = mock_reply(request.message, ", ".join(loaded_files))
-        analysis_data = build_mock_analysis(market_results, resolved_interval, market_request["symbols"])
-    else:
-        try:
-            raw_reply = await chat_completion(
-                api_base_url or "",
-                api_key or "",
-                model or "",
-                final_prompt,
-            )
-            reply, analysis_data = parse_analysis_response(raw_reply)
-        except LLMClientError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    try:
+        raw_reply = await chat_completion(
+            api_base_url or "",
+            api_key or "",
+            model or "",
+            final_prompt,
+        )
+        reply, analysis_data = parse_analysis_response(raw_reply)
+    except LLMClientError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     write_jsonl(
         {
@@ -158,7 +165,7 @@ async def _handle_chat(request: ChatRequest) -> ChatResponse:
             "analysis_data": analysis_data,
             "model": model,
             "api_base_url": api_base_url,
-            "mocked": mocked,
+            "mocked": False,
             "recent_context": [message.model_dump() for message in recent_context],
         }
     )
@@ -169,6 +176,7 @@ async def _handle_chat(request: ChatRequest) -> ChatResponse:
         loaded_prompt_file=loaded_file,
         loaded_prompt_files=loaded_files,
         loaded_file=loaded_file,
+        template_mode="crypto",
         detected_symbols=market_request["symbols"],
         detected_interval=resolved_interval,
         requested_interval=requested_interval,
@@ -179,7 +187,82 @@ async def _handle_chat(request: ChatRequest) -> ChatResponse:
         chart_data=chart_data,
         analysis_data=analysis_data,
         model=model,
-        mocked=mocked,
+        mocked=False,
+    )
+
+
+async def _handle_gold_chat(request: ChatRequest) -> ChatResponse:
+    api_base_url, api_key, model = _resolve_api_config(request)
+    _require_api_config(api_base_url, api_key, model)
+
+    loaded_file, methodology = load_gold_methodology()
+    loaded_files = [loaded_file]
+    recent_context = select_recent_context(request.history)
+
+    gold_context, market_results, chart_data = await build_gold_context()
+    gold_context_json = gold_context_to_prompt_json(gold_context)
+    final_prompt = build_gold_final_prompt(methodology, "", recent_context, gold_context_json, request.message)
+
+    try:
+        raw_reply = await chat_completion(
+            api_base_url or "",
+            api_key or "",
+            model or "",
+            final_prompt,
+        )
+        reply, analysis_data = parse_analysis_response(raw_reply)
+    except LLMClientError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    market_data_status = _market_status(market_results)
+    write_jsonl(
+        {
+            "template_mode": "gold",
+            "user_input": request.message,
+            "detected_symbols": [GOLD_SYMBOL],
+            "detected_interval": GOLD_CHART_INTERVAL,
+            "requested_interval": "gold_fixed",
+            "kline_limit": 30,
+            "requested_market_type": "futures",
+            "resolved_market_type": "futures",
+            "market_data_status": market_data_status,
+            "macro_data_status": gold_context.get("macro_data_status"),
+            "loaded_prompt_file": loaded_file,
+            "loaded_prompt_files": loaded_files,
+            "final_prompt": final_prompt,
+            "gold_context_json": gold_context,
+            "ai_response": reply,
+            "analysis_data": analysis_data,
+            "model": model,
+            "api_base_url": api_base_url,
+            "mocked": False,
+            "recent_context": [message.model_dump() for message in recent_context],
+        }
+    )
+
+    return ChatResponse(
+        reply=reply,
+        final_prompt=final_prompt,
+        loaded_prompt_file=loaded_file,
+        loaded_prompt_files=loaded_files,
+        loaded_file=loaded_file,
+        template_mode="gold",
+        detected_symbols=[GOLD_SYMBOL],
+        detected_interval=GOLD_CHART_INTERVAL,
+        requested_interval="gold_fixed",
+        requested_market_type="futures",
+        resolved_market_type="futures",
+        market_data_status=market_data_status,
+        market_context=gold_context_json,
+        chart_data=chart_data,
+        analysis_data=analysis_data,
+        gold_context_json=gold_context,
+        macro_data_status=gold_context.get("macro_data_status"),
+        macro_summary=gold_context.get("macro_summary"),
+        economic_calendar=gold_context.get("economic_calendar"),
+        official_news=gold_context.get("official_news"),
+        model=model,
+        mocked=False,
     )
 
 

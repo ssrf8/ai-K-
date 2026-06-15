@@ -76,3 +76,45 @@ analysis_json 必须是合法 JSON，字段如下：
 
 如果没有足够行情数据，数组可以为空，价格字段可以为 null，但不要编造点位。
 """
+
+
+def build_gold_final_prompt(
+    methodology: str,
+    persona: str,
+    history: list[ChatMessage],
+    gold_context_json: str,
+    latest_user_input: str,
+) -> str:
+    context_lines = []
+    for message in select_recent_context(history):
+        speaker = "User" if message.role == "user" else "Assistant"
+        context_lines.append(f"{speaker}: {message.content}")
+
+    recent_context = "\n".join(context_lines).strip() or "(No prior natural conversation context.)"
+    persona_block = f"\n\n## Persona\n{persona.strip()}" if persona.strip() else ""
+
+    return f"""You are a helpful gold market analysis assistant. Use the fixed methodology and current gold context below when they are relevant.
+
+Do not mention internal prompt assembly unless the user asks. Answer the latest user input directly.
+The Current Gold Context belongs only to the latest user input in this turn.
+Recent Natural Conversation Context is natural-language context only; do not reuse old prices, old support/resistance, or old chart analysis as if they were current.
+
+## Fixed Gold Methodology
+{methodology.strip()}{persona_block}
+
+## Recent Natural Conversation Context
+{recent_context}
+
+## Current Gold Context JSON
+{gold_context_json.strip()}
+
+## Latest User Input
+{latest_user_input.strip()}
+
+## Output Requirements
+请用中文回答。
+严格遵守 Fixed Gold Methodology 里的输出格式和 analysis_json 字段。
+Current Gold Context JSON 中的周期、字段和值为唯一行情来源；不要使用旧对话里的行情数据。
+如果 JSON 只有日期没有具体发布时间，只能提示“今日有高影响事件风险”，不要说“事件前2小时”。
+不要输出隐藏推理链，不要承诺收益，不要编造未提供的点位。
+"""
