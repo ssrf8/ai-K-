@@ -422,9 +422,10 @@ export default function App() {
               <select
                 value={config.klineInterval || "auto"}
                 onChange={(event) => updateConfig({ klineInterval: event.target.value })}
-                disabled={(config.templateMode || "crypto") === "gold"}
               >
-                <option value="auto">自动识别</option>
+                <option value="auto">
+                  {(config.templateMode || "crypto") === "gold" ? "默认 15M" : "自动识别"}
+                </option>
                 <option value="1m">1M</option>
                 <option value="5m">5M</option>
                 <option value="15m">15M</option>

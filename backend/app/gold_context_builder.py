@@ -13,12 +13,13 @@ from app.binance_client import fetch_futures_klines
 
 
 GOLD_SYMBOL = "XAUUSDT"
-GOLD_INTERVALS = ["15m", "1h", "4h", "1d"]
+GOLD_DEFAULT_INTERVAL = "15m"
+GOLD_CONTEXT_INTERVALS = ["15m", "1h", "4h", "1d"]
+GOLD_SUPPORTED_INTERVALS = {"1m", "5m", "15m", "1h", "4h", "1d"}
 GOLD_CANDLES_PER_INTERVAL = 30
 GOLD_ANALYSIS_CANDLES = 120
 GOLD_CHART_CANDLES = 120
 GOLD_FETCH_LIMIT = 220
-GOLD_CHART_INTERVAL = "15m"
 FRED_BASE_URL = "https://api.stlouisfed.org/fred/series/observations"
 FRED_RELEASE_DATES_URL = "https://api.stlouisfed.org/fred/releases/dates"
 BLS_URL = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
@@ -521,12 +522,26 @@ def _closed_and_forming(candles: list[dict]) -> tuple[list[dict], dict[str, Any]
     return closed, current
 
 
-async def fetch_gold_klines() -> tuple[dict[str, Any], list[dict], list[dict]]:
+def resolve_gold_interval(interval: str | None) -> str:
+    if interval in (None, "", "auto"):
+        return GOLD_DEFAULT_INTERVAL
+    if interval not in GOLD_SUPPORTED_INTERVALS:
+        return GOLD_DEFAULT_INTERVAL
+    return interval
+
+
+def _gold_intervals(primary_interval: str) -> list[str]:
+    return list(dict.fromkeys([primary_interval, *GOLD_CONTEXT_INTERVALS]))
+
+
+async def fetch_gold_klines(primary_interval: str = GOLD_DEFAULT_INTERVAL) -> tuple[dict[str, Any], list[dict], list[dict]]:
+    primary_interval = resolve_gold_interval(primary_interval)
+    intervals = _gold_intervals(primary_interval)
     kline_by_interval = {}
     chart_data = []
     market_results = []
 
-    for interval in GOLD_INTERVALS:
+    for interval in intervals:
         result = await fetch_futures_klines(GOLD_SYMBOL, interval, GOLD_FETCH_LIMIT)
         market_results.append(result)
         if result.get("status") != "ok":
@@ -563,7 +578,7 @@ async def fetch_gold_klines() -> tuple[dict[str, Any], list[dict], list[dict]]:
             },
         }
 
-        if interval == GOLD_CHART_INTERVAL:
+        if interval == primary_interval:
             chart_closed = all_closed[-GOLD_CHART_CANDLES:]
             chart_result = {
                 **result,
@@ -597,12 +612,13 @@ async def fetch_gold_klines() -> tuple[dict[str, Any], list[dict], list[dict]]:
     payload = {
         "symbol": GOLD_SYMBOL,
         "source": "Binance USD-M Futures",
-        "intervals": GOLD_INTERVALS,
+        "primary_interval": primary_interval,
+        "intervals": intervals,
         "candles_per_interval": GOLD_CANDLES_PER_INTERVAL,
         "fields": ["time", "open", "high", "low", "close", "volume"],
         "symbols_per_request": 1,
         "total_candles_per_symbol": ok_candles,
-        "expected_total_candles_per_symbol": len(GOLD_INTERVALS) * GOLD_CANDLES_PER_INTERVAL,
+        "expected_total_candles_per_symbol": len(intervals) * GOLD_CANDLES_PER_INTERVAL,
         "current_price": current_price,
         "current_forming_period": {
             "included": True,
@@ -1106,8 +1122,9 @@ async def fetch_fed_news() -> dict[str, Any]:
     )
 
 
-async def build_gold_context() -> tuple[dict[str, Any], list[dict], list[dict]]:
-    kline_data, market_results, chart_data = await fetch_gold_klines()
+async def build_gold_context(primary_interval: str = GOLD_DEFAULT_INTERVAL) -> tuple[dict[str, Any], list[dict], list[dict]]:
+    primary_interval = resolve_gold_interval(primary_interval)
+    kline_data, market_results, chart_data = await fetch_gold_klines(primary_interval)
     fred = await fetch_fred_summary()
     bls = await fetch_bls_summary()
     calendar = await fetch_economic_calendar()
@@ -1147,6 +1164,7 @@ async def build_gold_context() -> tuple[dict[str, Any], list[dict], list[dict]]:
         "symbol": GOLD_SYMBOL,
         "market": "Binance USD-M Futures",
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "primary_interval": primary_interval,
         "kline_summary": kline_data,
         "macro_summary": macro_summary,
         "macro_data_status": {
@@ -1165,7 +1183,12 @@ async def build_gold_context() -> tuple[dict[str, Any], list[dict], list[dict]]:
             "latest_alert": fed_news.get("latest_alert"),
             "fed_rss": fed_news,
         },
-        "preference": {"style": "short_term", "target_move_usd": 15},
+        "preference": {
+            "style": "short_term",
+            "target_move_usd": 15,
+            "primary_interval": primary_interval,
+            "analysis_basis": f"以 {primary_interval} 为主分析、触发和收线确认周期；其他周期只作趋势背景与交叉验证。",
+        },
     }
     return gold_context, market_results, chart_data
 

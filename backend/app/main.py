@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.analysis_parser import parse_analysis_response
 from app.binance_client import fetch_klines_with_fallback
-from app.gold_context_builder import GOLD_CHART_INTERVAL, GOLD_SYMBOL, build_gold_context, gold_context_to_prompt_json
+from app.gold_context_builder import GOLD_SYMBOL, build_gold_context, gold_context_to_prompt_json, resolve_gold_interval
 from app.llm_client import LLMClientError, chat_completion, fetch_models, has_api_config
 from app.logger import write_jsonl
 from app.market_context_builder import build_market_context
@@ -199,7 +199,9 @@ async def _handle_gold_chat(request: ChatRequest) -> ChatResponse:
     loaded_files = [loaded_file]
     recent_context = select_recent_context(request.history)
 
-    gold_context, market_results, chart_data = await build_gold_context()
+    requested_interval = request.kline_interval or "auto"
+    primary_interval = resolve_gold_interval(requested_interval)
+    gold_context, market_results, chart_data = await build_gold_context(primary_interval)
     gold_context_json = gold_context_to_prompt_json(gold_context)
     final_prompt = build_gold_final_prompt(methodology, "", recent_context, gold_context_json, request.message)
 
@@ -220,8 +222,8 @@ async def _handle_gold_chat(request: ChatRequest) -> ChatResponse:
             "template_mode": "gold",
             "user_input": request.message,
             "detected_symbols": [GOLD_SYMBOL],
-            "detected_interval": GOLD_CHART_INTERVAL,
-            "requested_interval": "gold_fixed",
+            "detected_interval": primary_interval,
+            "requested_interval": requested_interval,
             "kline_limit": 30,
             "requested_market_type": "futures",
             "resolved_market_type": "futures",
@@ -248,8 +250,8 @@ async def _handle_gold_chat(request: ChatRequest) -> ChatResponse:
         loaded_file=loaded_file,
         template_mode="gold",
         detected_symbols=[GOLD_SYMBOL],
-        detected_interval=GOLD_CHART_INTERVAL,
-        requested_interval="gold_fixed",
+        detected_interval=primary_interval,
+        requested_interval=requested_interval,
         requested_market_type="futures",
         resolved_market_type="futures",
         market_data_status=market_data_status,

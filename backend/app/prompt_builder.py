@@ -98,6 +98,8 @@ def build_gold_final_prompt(
 Do not mention internal prompt assembly unless the user asks. Answer the latest user input directly.
 The Current Gold Context belongs only to the latest user input in this turn.
 Recent Natural Conversation Context is natural-language context only; do not reuse old prices, old support/resistance, or old chart analysis as if they were current.
+The selected primary interval is in Current Gold Context JSON at `primary_interval` and `kline_summary.primary_interval`.
+Use that interval as the main analysis, setup, trigger, and candle-close confirmation basis. Other intervals are supporting context only.
 
 ## Fixed Gold Methodology
 {methodology.strip()}{persona_block}
@@ -115,6 +117,8 @@ Recent Natural Conversation Context is natural-language context only; do not reu
 请用中文回答。
 严格遵守 Fixed Gold Methodology 里的输出格式和 analysis_json 字段。
 Current Gold Context JSON 中的周期、字段和值为唯一行情来源；不要使用旧对话里的行情数据。
+必须将 JSON 的 primary_interval 原样写入 analysis_json.primary_interval，并以该周期作为主分析、关键位、触发和收线确认基准。
+其他周期只用于趋势背景和交叉验证，不得把固定 15m 当作所有请求的主周期。
 如果 JSON 只有日期没有具体发布时间，只能提示“今日有高影响事件风险”，不要说“事件前2小时”。
 经济日历只作为风险影响因子，不要因为出现高影响事件就机械否决结构方案；仍需给出主方案和备选方案概率。
 如果用户问“能不能买/现在可以买入吗/能不能空”，用户可见回复不能只说“别急/等收线/观望”；必须给出对应方向的概率、反向方案概率、观望概率和各自触发条件。
